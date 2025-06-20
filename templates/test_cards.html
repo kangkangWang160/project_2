@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+    <title>Test Card Images</title>
+    <style>
+        .cards { display: flex; flex-wrap: wrap; gap: 10px; }
+        .card-img { height: 120px; }
+        .card-block { text-align: center; margin: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Test: Card Images in static/cards/</h1>
+    <div class="cards">
+        {% for file in files %}
+        <div class="card-block">
+            <img class="card-img" src="{{ url_for('custom_cards', filename=file) }}" alt="{{ file }}">
+            <div>{{ file }}</div>
+        </div>
+        {% else %}
+        <p>No PNG files found in static/cards/.</p>
+        {% endfor %}
+    </div>
+</body>
+</html>
