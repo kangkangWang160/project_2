@@ -43,7 +43,9 @@
     <button class="side-panel-btn" onclick="document.getElementById('sidePanel').classList.add('open')">?</button>
     <div id="game-status" style="position:fixed; top:0; left:50%; transform:translateX(-50%); width:50vw; background:#1a3d1a; color:#fff; font-size:1.1em; text-align:center; padding:14px 0 8px 0; z-index:1500; box-shadow:0 2px 8px #000a; border-radius:0 0 18px 18px; display:flex; align-items:center; justify-content:center;">
         <span id="status-text" style="flex:1;">Welcome to Texas Hold'em! Place your bet to start the round.</span>
-        <button id="next-btn" class="btn" style="margin-left:10px; background:#ffe066; color:#006400; font-weight:700; font-size:1.1em; border-radius:50%; width:38px; height:38px; box-shadow:0 2px 8px #0004; display:none;">Next</button>
+        <button id="next-btn" class="btn" style="margin-left:10px; background:#40a2ff; color:#fff; font-weight:700; font-size:1.1em; border-radius:22px/50%; width:70px; height:38px; box-shadow:0 2px 8px #0004; display:none; display:flex; align-items:center; justify-content:flex-start; padding-left:14px; padding-right:0; position:relative; overflow:hidden; transition:background 0.2s;">
+            <span style="font-size:0.95em; font-weight:700; letter-spacing:0.5px;">Next</span>
+        </button>
         <button id="terms-btn" title="Poker Terms" style="margin-left:18px; background:#ffe066; color:#006400; border:none; border-radius:50%; width:38px; height:38px; font-size:1.3em; font-weight:bold; cursor:pointer; box-shadow:0 2px 8px #0004; display:none;">?</button>
     </div>
     <div id="bet-status" style="position:fixed; top:60px; left:50%; transform:translateX(-50%); width:50vw; background:#1a3d1a; color:#fff; font-size:1.1em; text-align:center; padding:14px 0 8px 0; z-index:1501; box-shadow:0 2px 8px #000a; border-radius:0 0 18px 18px; display:none; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;"></div>
@@ -176,12 +178,30 @@
         }
         function showNextButton() {
             const nextBtn = document.getElementById('next-btn');
-            if (nextBtn) nextBtn.style.display = '';
+            const betForm = document.getElementById('bet-form');
+            if (nextBtn && betForm && (betForm.style.display === 'none' || betForm.style.display === '')) {
+                nextBtn.style.display = '';
+            } else if (nextBtn) {
+                nextBtn.style.display = 'none';
+            }
         }
         function hideNextButton() {
             const nextBtn = document.getElementById('next-btn');
             if (nextBtn) nextBtn.style.display = 'none';
         }
+        // Hide Next button if betting form is shown
+        const betFormObserver = new MutationObserver(function() {
+            const betForm = document.getElementById('bet-form');
+            const nextBtn = document.getElementById('next-btn');
+            if (betForm && nextBtn) {
+                if (betForm.style.display === '' || betForm.style.display === 'flex' || betForm.style.display === 'block') {
+                    nextBtn.style.display = 'none';
+                }
+            }
+        });
+        betFormObserver.observe(document.getElementById('bet-form'), { attributes: true, attributeFilter: ['style'] });
+        // Hide Next button on initial load (betting screen)
+        hideNextButton();
         function updateStakeBox(playerBet, aiBet) {
             const stakeAmount = document.getElementById('stake-amount');
             if (stakeAmount) {
@@ -218,11 +238,11 @@
                     if (statusText) {
                         let aiActionText = '';
                         if (data.ai_bet > 0) {
-                            aiActionText = `AI bet ${data.ai_bet} tokens.`;
+                            aiActionText = `AI bet ${data.ai_bet} ${data.ai_bet == 1 ? 'token' : 'tokens'}.`;
                         } else {
                             aiActionText = 'AI calls.';
                         }
-                        statusText.textContent = `You bet ${bet} tokens. ${aiActionText}`;
+                        statusText.textContent = `You bet ${bet} ${bet == 1 ? 'token' : 'tokens'}. ${aiActionText}`;
                     }
                     // Update token counts and bet amounts on the page without reload
                     document.querySelectorAll('.token-number')[0].textContent = data.tokens;
@@ -328,6 +348,43 @@
             }
             // Hide the Next button after use
             hideNextButton();
+            // Update the status text and add a new Next button for the next betting round
+            const statusText = document.getElementById('status-text');
+            if (statusText) statusText.textContent = '3 community cards have been revealed.';
+            // Show a new Next button in the status bar
+            const nextBtn = document.getElementById('next-btn');
+            if (nextBtn) {
+                nextBtn.style.display = '';
+                nextBtn.onclick = function() {
+                    // When pressed, update the status text and hide the button
+                    const statusText = document.getElementById('status-text');
+                    if (statusText) statusText.textContent = 'A new round of betting has begun. Choose wisely.';
+                    nextBtn.style.display = 'none';
+                    // Show the betting form again
+                    const betForm = document.getElementById('bet-form');
+                    if (betForm) betForm.style.display = '';
+                    // Add a Call button if not already present
+                    if (!document.getElementById('call-btn')) {
+                        const callBtn = document.createElement('button');
+                        callBtn.type = 'button';
+                        callBtn.id = 'call-btn';
+                        callBtn.className = 'btn';
+                        callBtn.style.background = '#ffe066';
+                        callBtn.style.color = '#006400';
+                        callBtn.style.fontWeight = '700';
+                        callBtn.textContent = 'Call';
+                        callBtn.onclick = function() {
+                            // Simulate a call by setting the bet input to the minimum call amount (for demo, set to 1)
+                            var betInput = document.getElementById('player_bet');
+                            betInput.value = betInput.min || 1;
+                            document.getElementById('bet-form').requestSubmit();
+                        };
+                        // Insert the Call button before the All In button
+                        const btnRow = betForm.querySelector('div[style*="display:flex"]');
+                        if (btnRow) btnRow.insertBefore(callBtn, btnRow.children[1]);
+                    }
+                };
+            }
         };
         document.getElementById('all-in-btn').onclick = function() {
             var betInput = document.getElementById('player_bet');
