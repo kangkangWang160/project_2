@@ -41,10 +41,12 @@
     </a>
     <button class="points-panel-btn" onclick="document.getElementById('pointsPanel').classList.add('open')">&#9876;</button>
     <button class="side-panel-btn" onclick="document.getElementById('sidePanel').classList.add('open')">?</button>
-    <div id="game-status" style="position:fixed; top:0; left:50%; transform:translateX(-50%); width:50vw; background:#1a3d1a; color:#fff; font-size:1.3em; text-align:center; padding:18px 0 10px 0; z-index:1500; box-shadow:0 2px 8px #000a; border-radius:0 0 18px 18px; display:flex; align-items:center; justify-content:center;">
+    <div id="game-status" style="position:fixed; top:0; left:50%; transform:translateX(-50%); width:50vw; background:#1a3d1a; color:#fff; font-size:1.1em; text-align:center; padding:14px 0 8px 0; z-index:1500; box-shadow:0 2px 8px #000a; border-radius:0 0 18px 18px; display:flex; align-items:center; justify-content:center;">
         <span id="status-text" style="flex:1;">Welcome to Texas Hold'em! Place your bet to start the round.</span>
+        <button id="next-btn" class="btn" style="margin-left:10px; background:#ffe066; color:#006400; font-weight:700; font-size:1.1em; border-radius:50%; width:38px; height:38px; box-shadow:0 2px 8px #0004; display:none;">Next</button>
         <button id="terms-btn" title="Poker Terms" style="margin-left:18px; background:#ffe066; color:#006400; border:none; border-radius:50%; width:38px; height:38px; font-size:1.3em; font-weight:bold; cursor:pointer; box-shadow:0 2px 8px #0004; display:none;">?</button>
     </div>
+    <div id="bet-status" style="position:fixed; top:60px; left:50%; transform:translateX(-50%); width:50vw; background:#1a3d1a; color:#fff; font-size:1.1em; text-align:center; padding:14px 0 8px 0; z-index:1501; box-shadow:0 2px 8px #000a; border-radius:0 0 18px 18px; display:none; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;"></div>
     <div id="terms-modal" style="display:none; position:fixed; top:70px; left:50%; transform:translateX(-50%); background:#1a3d1a; color:#fff; border-radius:14px; box-shadow:0 2px 16px #000a; z-index:2001; padding:28px 32px; min-width:320px; max-width:90vw;">
         <h3 style="margin-top:0; color:#ffe066;">Poker Terms</h3>
         <ul id="terms-list" style="font-size:1.1em; line-height:1.7; padding-left:18px;"></ul>
@@ -94,7 +96,6 @@
             <div class="cards" id="community-cards">
                 <img class="card-img" src="{{ url_for('custom_cards', filename='cards.png') }}" alt="Community Pool">
             </div>
-            <button id="next-btn" class="btn" style="margin-top:18px; background:#ffe066; color:#006400; font-weight:700; font-size:1.1em; border-radius:8px; box-shadow:0 2px 8px #0004;">Next</button>
         </div>
     </div>
     <div class="bottom-section" style="position:relative;">
@@ -117,13 +118,22 @@
         <form id="bet-form" style="position:fixed; top:120px; right:40px; width:320px; background:#1a3d1a; border-radius:14px; box-shadow:0 2px 12px #000a; padding:24px 18px; display:flex; flex-direction:column; align-items:center; gap:18px; z-index:1200;" onsubmit="return submitBet(event)">
             <label for="player_bet" style="font-size:1.2em; color:#fff;">How many tokens do you want to bet?</label>
             <input type="number" id="player_bet" name="player_bet" min="1" max="{{ tokens }}" value="1" style="width:80px; font-size:1.2em; padding:6px 10px; border-radius:6px; border:1px solid #ccc;">
-            <button type="submit" id="bet-btn" class="btn" style="background:#2ecc40; color:#fff;">{{ 'Call' if call_amount and call_amount > 0 else 'Bet' }}</button>
+            <div style="display:flex; gap:10px; width:100%; justify-content:center;">
+                <button type="submit" id="bet-btn" class="btn" style="background:#2ecc40; color:#fff;">{{ 'Call' if call_amount and call_amount > 0 else 'Bet' }}</button>
+                <button type="button" id="all-in-btn" class="btn" style="background:#ffb347; color:#006400; font-weight:700;">All In</button>
+                <button type="button" id="forfeit-btn" class="btn" style="background:#ff4d4d; color:#fff; font-weight:700;">Forfeit</button>
+            </div>
         </form>
     </div>
     <div style="position:fixed; top:100px; left:30px; z-index:1100; display:flex; align-items:center; gap:10px; background:#ffe066; border-radius:18px; box-shadow:0 2px 8px #0004; padding:10px 18px; min-width:170px;">
         <img class="token-img" src="{{ url_for('custom_cards', filename=token_img) }}" alt="Token" style="height:28px; margin-right:8px; vertical-align:middle;">
         <span class="token-number" style="font-size:1.1em; color:#b8860b; font-weight:700;">{{ ai_tokens }}</span>
         <span style="font-size:1.1em; color:#006400; font-weight:600; margin-left:6px;">AI tokens left</span>
+    </div>
+    <div id="stake-box" style="position:fixed; top:70px; right:40px; left:auto; transform:none; background:#ffe066; color:#006400; border-radius:10px; box-shadow:0 2px 8px #0004; padding:8px 24px; font-size:1.2em; font-weight:700; z-index:1400; display:flex; align-items:center; gap:10px;">
+        <span>Stake:</span>
+        <span id="stake-amount">{{ player_bet|default(0) + ai_bet|default(0) }}</span>
+        <img src="{{ url_for('custom_cards', filename='token.png') }}" alt="Token" style="height:22px; margin-left:4px;">
     </div>
     <script>
         function showTermsButtonIfNeeded() {
@@ -164,6 +174,20 @@
                 betBtn.textContent = (callAmount && callAmount > 0) ? 'Call' : 'Bet';
             }
         }
+        function showNextButton() {
+            const nextBtn = document.getElementById('next-btn');
+            if (nextBtn) nextBtn.style.display = '';
+        }
+        function hideNextButton() {
+            const nextBtn = document.getElementById('next-btn');
+            if (nextBtn) nextBtn.style.display = 'none';
+        }
+        function updateStakeBox(playerBet, aiBet) {
+            const stakeAmount = document.getElementById('stake-amount');
+            if (stakeAmount) {
+                stakeAmount.textContent = Number(playerBet) + Number(aiBet);
+            }
+        }
         function submitBet(event) {
             event.preventDefault();
             const bet = document.getElementById('player_bet').value;
@@ -174,23 +198,29 @@
             })
             .then(response => response.json())
             .then(data => {
+                const betStatus = document.getElementById('bet-status');
                 if (data.error) {
-                    // Only update status if the element exists
-                    const betStatus = document.getElementById('bet-status');
-                    if (betStatus) betStatus.textContent = data.error;
+                    if (betStatus) {
+                        betStatus.textContent = data.error;
+                        betStatus.style.display = '';
+                    }
                     const statusText = document.getElementById('status-text');
                     if (statusText) statusText.textContent = data.error;
                 } else {
+                    if (betStatus) {
+                        betStatus.textContent = '';
+                        betStatus.style.display = 'none';
+                    }
                     // Only update status if the element exists
-                    const betStatus = document.getElementById('bet-status');
-                    if (betStatus) betStatus.textContent = '';
+                    const betStatusElem = document.getElementById('bet-status');
+                    if (betStatusElem) betStatusElem.textContent = '';
                     const statusText = document.getElementById('status-text');
                     if (statusText) {
                         let aiActionText = '';
                         if (data.ai_bet > 0) {
                             aiActionText = `AI bet ${data.ai_bet} tokens.`;
                         } else {
-                            aiActionText = `AI checked.`;
+                            aiActionText = 'AI calls.';
                         }
                         statusText.textContent = `You bet ${bet} tokens. ${aiActionText}`;
                     }
@@ -222,6 +252,10 @@
                     }
                     // Hide the bet form after player checks
                     document.getElementById('bet-form').style.display = 'none';
+                    // Show the Next button after a successful bet
+                    showNextButton();
+                    // Update the stake box
+                    updateStakeBox(data.player_bet, data.ai_bet);
                 }
                 // Update bet button text based on call amount
                 updateBetButtonText(data.call_amount);
@@ -230,7 +264,9 @@
             return false;
         }
         // Initial set for bet button text
-        updateBetButtonText({{ call_amount|default(0, true) }});
+        updateBetButtonText(0);
+        // Initial set for stake box
+        updateStakeBox(0, 0);
         // Initial check for terms button
         showTermsButtonIfNeeded();
         // Close side panels on Escape key
@@ -245,13 +281,70 @@
             document.getElementById('terms-modal').style.display = 'block';
         };
         document.getElementById('next-btn').onclick = function() {
-            // For demo: add a new card image next to the community pool image
+            // Move the burn card (cardback) to the far left edge and deal 3 random community cards
             const communityCards = document.getElementById('community-cards');
-            const newCard = document.createElement('img');
-            newCard.className = 'card-img';
-            newCard.src = "{{ url_for('custom_cards', filename='cardback.jpg') }}";
-            newCard.alt = 'New Card';
-            communityCards.appendChild(newCard);
+            // Remove all existing cards (including placeholder or previous round)
+            while (communityCards.firstChild) {
+                communityCards.removeChild(communityCards.firstChild);
+            }
+            // Add burn card to the far left edge
+            const burnCard = document.createElement('img');
+            burnCard.className = 'card-img';
+            burnCard.src = "{{ url_for('custom_cards', filename='cardback.jpg') }}";
+            burnCard.alt = 'Burn Card';
+            // No extra margin, just use .cards gap
+            communityCards.appendChild(burnCard);
+            // Add a cardback image to the center (after burn card)
+            const centerCardback = document.createElement('img');
+            centerCardback.className = 'card-img';
+            centerCardback.src = "{{ url_for('custom_cards', filename='cardback.jpg') }}";
+            centerCardback.alt = 'Cardback';
+            communityCards.appendChild(centerCardback);
+            // List of all possible card filenames (excluding cardback and cards.png)
+            const cardNames = [
+                '2 of clubs.png','2 of diamonds.png','2 of hearts.png','2 of spades.png',
+                '3 of clubs.png','3 of diamonds.png','3 of hearts.png','3 of spades.png',
+                '4 of clubs.png','4 of diamonds.png','4 of hearts.png','4 of spades.png',
+                '5 of clubs.png','5 of diamonds.png','5 of hearts.png','5 of spades.png',
+                '6 of clubs.png','6 of diamonds.png','6 of hearts.png','6 of spades.png',
+                '7 of clubs.png','7 of diamonds.png','7 of hearts.png','7 of spades.png',
+                '8 of clubs.png','8 of diamonds.png','8 of hearts.png','8 of spades.png',
+                '9 of clubs.png','9 of diamonds.png','9 of hearts.png','9 of spades.png',
+                '10 of clubs.png','10 of diamonds.png','10 of hearts.png','10 of spades.png',
+                'jack of clubs.png','jack of diamonds.png','jack of hearts.png','jack of spades.png',
+                'queen of clubs.png','queen of diamonds.png','queen of hearts.png','queen of spades.png',
+                'king of clubs.png','king of diamonds.png','king of hearts.png','king of spades.png',
+                'ace of clubs.png','ace of diamonds.png','ace of hearts.png','ace of spades.png'
+            ];
+            // Shuffle and pick 3 random cards
+            const shuffled = cardNames.sort(() => 0.5 - Math.random());
+            const selected = shuffled.slice(0, 3);
+            for (const card of selected) {
+                const img = document.createElement('img');
+                img.className = 'card-img';
+                img.src = `/static/cards/${card}`;
+                img.alt = card.replace('.png', '');
+                communityCards.appendChild(img);
+            }
+            // Hide the Next button after use
+            hideNextButton();
+        };
+        document.getElementById('all-in-btn').onclick = function() {
+            var betInput = document.getElementById('player_bet');
+            betInput.value = betInput.max;
+            document.getElementById('bet-form').requestSubmit();
+        };
+        document.getElementById('forfeit-btn').onclick = function() {
+            fetch('/forfeit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                const statusText = document.getElementById('status-text');
+                if (statusText) statusText.textContent = data.message || 'You forfeited the round.';
+                document.getElementById('bet-form').style.display = 'none';
+            });
         };
     </script>
 </body>
