@@ -119,7 +119,7 @@
         </div>
         <form id="bet-form" style="position:fixed; top:120px; right:40px; width:320px; background:#1a3d1a; border-radius:14px; box-shadow:0 2px 12px #000a; padding:24px 18px; display:flex; flex-direction:column; align-items:center; gap:18px; z-index:1200;" onsubmit="return submitBet(event)">
             <label for="player_bet" style="font-size:1.2em; color:#fff;">How many tokens do you want to bet?</label>
-            <input type="number" id="player_bet" name="player_bet" min="1" max="{{ tokens }}" value="1" style="width:80px; font-size:1.2em; padding:6px 10px; border-radius:6px; border:1px solid #ccc;">
+            <input type="number" id="player_bet" name="player_bet" min="1" max="{{ tokens }}" value="" style="width:80px; font-size:1.2em; padding:6px 10px; border-radius:6px; border:1px solid #ccc;">
             <div style="display:flex; gap:8px; width:100%; justify-content:center;">
                 <button type="submit" id="bet-btn" class="btn" style="background:#2ecc40; color:#fff; font-size:0.95em; padding:7px 16px; min-width:60px;">{{ 'Call' if call_amount and call_amount > 0 else 'Bet' }}</button>
                 <button type="button" id="all-in-btn" class="btn" style="background:#ffb347; color:#006400; font-weight:700; font-size:0.95em; padding:7px 16px; min-width:60px;">All In</button>
@@ -368,25 +368,7 @@
                     const betForm = document.getElementById('bet-form');
                     if (betForm) betForm.style.display = '';
                     // Add a Call button if not already present
-                    if (!document.getElementById('call-btn')) {
-                        const callBtn = document.createElement('button');
-                        callBtn.type = 'button';
-                        callBtn.id = 'call-btn';
-                        callBtn.className = 'btn';
-                        callBtn.style.background = '#ffe066';
-                        callBtn.style.color = '#006400';
-                        callBtn.style.fontWeight = '700';
-                        callBtn.textContent = 'Call';
-                        callBtn.onclick = function() {
-                            // Simulate a call by setting the bet input to the minimum call amount (for demo, set to 1)
-                            var betInput = document.getElementById('player_bet');
-                            betInput.value = betInput.min || 1;
-                            document.getElementById('bet-form').requestSubmit();
-                        };
-                        // Insert the Call button before the All In button
-                        const btnRow = betForm.querySelector('div[style*="display:flex"]');
-                        if (btnRow) btnRow.insertBefore(callBtn, btnRow.children[1]);
-                    }
+                    addCallButtonIfNeeded();
                 };
             }
         };
@@ -419,6 +401,9 @@
             } else {
                 betForm.style.display = '';
                 allInMsg.style.display = 'none';
+                // Clear the bet input so no number is shown until the player types one in
+                var betInput = document.getElementById('player_bet');
+                if (betInput) betInput.value = '';
             }
         }
         // Always hide all-in message on page load unless tokens are 0
@@ -429,6 +414,34 @@
             document.getElementById('all-in-message').style.display = 'none';
             showNextButton();
         };
+        // Fix Call button to do nothing if call amount is 0
+        function addCallButtonIfNeeded() {
+            if (!document.getElementById('call-btn')) {
+                const callBtn = document.createElement('button');
+                callBtn.type = 'button';
+                callBtn.id = 'call-btn';
+                callBtn.className = 'btn';
+                callBtn.style.background = '#ffe066';
+                callBtn.style.color = '#006400';
+                callBtn.style.fontWeight = '700';
+                callBtn.textContent = 'Call';
+                callBtn.onclick = function() {
+                    if (typeof currentCallAmount !== 'undefined' && currentCallAmount > 0) {
+                        var betInput = document.getElementById('player_bet');
+                        betInput.value = currentCallAmount;
+                        document.getElementById('bet-form').requestSubmit();
+                    } else {
+                        // Just hide the bet form if call amount is 0 (already matched)
+                        document.getElementById('bet-form').style.display = 'none';
+                        showNextButton();
+                    }
+                };
+                // Insert the Call button before the All In button
+                const betForm = document.getElementById('bet-form');
+                const btnRow = betForm.querySelector('div[style*="display:flex"]');
+                if (btnRow) btnRow.insertBefore(callBtn, btnRow.children[1]);
+            }
+        }
     </script>
 </body>
 </html>
