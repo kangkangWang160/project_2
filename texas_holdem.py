@@ -14,9 +14,11 @@ def get_deck():
 def card_filename(card):
     return f"{card['rank']} of {card['suit']}.png"
 
-def evaluate_hand_strength(hand):
-    # Very basic: pairs are strong, high cards are medium, else weak
+def evaluate_hand_strength(hand, community=None, ai_tokens=100, player_bet=0, revealed_count=0):
+    # Improved: consider pairs, high cards, and community cards for post-flop
     ranks = [card['rank'] for card in hand]
+    if community:
+        ranks += [card['rank'] for card in community[:revealed_count]]
     rank_counts = {r: ranks.count(r) for r in ranks}
     if 2 in rank_counts.values():
         return 'strong'  # Pair
@@ -37,8 +39,17 @@ def start():
     random.shuffle(deck)
     player_hand = [deck.pop(), deck.pop()]
     ai_hand = [deck.pop(), deck.pop()]
-    session['ai_hand'] = str(ai_hand)
     community = [deck.pop() for _ in range(5)]
+    # --- Safety check for duplicates ---
+    all_cards = player_hand + ai_hand + community
+    seen = set()
+    for card in all_cards:
+        card_id = (card['rank'], card['suit'])
+        if card_id in seen:
+            print(f"[ERROR] Duplicate card found: {card}")
+        seen.add(card_id)
+    # ---
+    session['ai_hand'] = str(ai_hand)
     session['community'] = str(community)
     tokens = session.get('tokens', 100)
     ai_tokens = session.get('ai_tokens', 100)
@@ -102,34 +113,40 @@ def bet():
     tokens -= player_bet
     session['tokens'] = tokens
     session['player_bet'] = session.get('player_bet', 0) + player_bet
-    # AI logic: use hand strength
+    # AI logic: improved betting
     ai_tokens = session.get('ai_tokens', 100)
     ai_bet = 0
     ai_action = 'check'
     ai_hand = session.get('ai_hand')
+    import ast
     if not ai_hand:
         ai_hand = [
             {'rank': '2', 'suit': 'hearts'},
             {'rank': '7', 'suit': 'clubs'}
         ]
     else:
-        # If stored as string, convert to dict
-        import ast
         if isinstance(ai_hand, str):
             ai_hand = ast.literal_eval(ai_hand)
-    strength = evaluate_hand_strength(ai_hand)
-    import random
+    community = session.get('community')
+    revealed_count = session.get('revealed_count', 0)
+    if isinstance(community, str):
+        community = ast.literal_eval(community)
+    strength = evaluate_hand_strength(ai_hand, community, ai_tokens, player_bet, revealed_count)
+    # Smarter AI betting logic
     if ai_tokens > 0:
         if strength == 'strong':
-            if player_bet < 10:
-                ai_bet = min(player_bet + random.randint(5, 15), ai_tokens)
+            if player_bet < 20:
+                ai_bet = min(player_bet + random.randint(10, 25), ai_tokens)
                 ai_action = 'raise'
             else:
                 ai_bet = min(player_bet, ai_tokens)
                 ai_action = 'call'
         elif strength == 'medium':
-            if player_bet <= 10:
+            if player_bet <= 15:
                 ai_bet = min(player_bet, ai_tokens)
+                ai_action = 'call'
+            elif player_bet < ai_tokens // 2:
+                ai_bet = min(player_bet // 2, ai_tokens)
                 ai_action = 'call'
             else:
                 ai_bet = 0
@@ -140,20 +157,13 @@ def bet():
                 ai_action = 'call'
             else:
                 ai_bet = 0
-                ai_action = 'check'
+                ai_action = 'fold'
     ai_tokens -= ai_bet
     session['ai_tokens'] = ai_tokens
     session['ai_bet'] = session.get('ai_bet', 0) + ai_bet
-
     # --- Betting round and community card reveal logic ---
-    # If both have bet (player and AI), reveal next community card and reset bets
     next_betting_round = False
-    revealed_count = session.get('revealed_count', 0)
     betting_round = session.get('betting_round', 0)
-    community = session.get('community')
-    import ast
-    if isinstance(community, str):
-        community = ast.literal_eval(community)
     # Both have bet if both player_bet and ai_bet are > 0
     if session['player_bet'] > 0 and session['ai_bet'] > 0:
         if revealed_count < 5:
@@ -163,7 +173,6 @@ def bet():
             session['ai_bet'] = 0
             session['betting_round'] = betting_round + 1
             next_betting_round = True
-    # Prepare community card info for frontend
     def card_img_obj(card):
         return {
             'img_url': url_for('custom_cards', filename=card_filename(card)),
