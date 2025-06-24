@@ -31,12 +31,15 @@ def start():
     session['ai_tokens'] = 100
     session['player_bet'] = 0
     session['ai_bet'] = 0
+    session['betting_round'] = 0
+    session['revealed_count'] = 0
     deck = get_deck()
     random.shuffle(deck)
     player_hand = [deck.pop(), deck.pop()]
     ai_hand = [deck.pop(), deck.pop()]
     session['ai_hand'] = str(ai_hand)
     community = [deck.pop() for _ in range(5)]
+    session['community'] = str(community)
     tokens = session.get('tokens', 100)
     ai_tokens = session.get('ai_tokens', 100)
     player_bet = session.get('player_bet', 0)
@@ -55,6 +58,7 @@ def start():
         player_hand=player_hand,
         ai_hand=ai_hand,
         community=community,
+        revealed_count=session['revealed_count'],
         card_filename=card_filename,
         tokens=tokens,
         ai_tokens=ai_tokens,
@@ -140,13 +144,41 @@ def bet():
     ai_tokens -= ai_bet
     session['ai_tokens'] = ai_tokens
     session['ai_bet'] = session.get('ai_bet', 0) + ai_bet
+
+    # --- Betting round and community card reveal logic ---
+    # If both have bet (player and AI), reveal next community card and reset bets
+    next_betting_round = False
+    revealed_count = session.get('revealed_count', 0)
+    betting_round = session.get('betting_round', 0)
+    community = session.get('community')
+    import ast
+    if isinstance(community, str):
+        community = ast.literal_eval(community)
+    # Both have bet if both player_bet and ai_bet are > 0
+    if session['player_bet'] > 0 and session['ai_bet'] > 0:
+        if revealed_count < 5:
+            revealed_count += 1
+            session['revealed_count'] = revealed_count
+            session['player_bet'] = 0
+            session['ai_bet'] = 0
+            session['betting_round'] = betting_round + 1
+            next_betting_round = True
+    # Prepare community card info for frontend
+    def card_img_obj(card):
+        return {
+            'img_url': url_for('custom_cards', filename=card_filename(card)),
+            'alt': f"{card['rank']} of {card['suit']}"
+        }
+    community_cards = [card_img_obj(card) for card in community[:revealed_count]]
     return jsonify({
         'player_bet': session['player_bet'],
         'ai_bet': session['ai_bet'],
         'tokens': tokens,
         'ai_tokens': ai_tokens,
         'ai_action': ai_action,
-        'ai_bet_amount': ai_bet
+        'ai_bet_amount': ai_bet,
+        'community_cards': community_cards,
+        'next_betting_round': next_betting_round
     })
 
 if __name__ == '__main__':
