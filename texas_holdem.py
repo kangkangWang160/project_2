@@ -1,6 +1,6 @@
 import os
 import random
-from flask import Flask, render_template, url_for, send_from_directory, session, redirect
+from flask import Flask, render_template, url_for, send_from_directory, session, redirect, request, jsonify
 
 app = Flask(__name__)
 app.secret_key = 'super_secret_key'
@@ -14,15 +14,33 @@ def get_deck():
 def card_filename(card):
     return f"{card['rank']} of {card['suit']}.png"
 
+def evaluate_hand_strength(hand):
+    # Very basic: pairs are strong, high cards are medium, else weak
+    ranks = [card['rank'] for card in hand]
+    rank_counts = {r: ranks.count(r) for r in ranks}
+    if 2 in rank_counts.values():
+        return 'strong'  # Pair
+    high_cards = {'ace', 'king', 'queen', 'jack', '10'}
+    if any(r in high_cards for r in ranks):
+        return 'medium'
+    return 'weak'
+
 @app.route('/start')
 def start():
     session['tokens'] = 100  # Reset tokens at the start of each game
+    session['ai_tokens'] = 100
+    session['player_bet'] = 0
+    session['ai_bet'] = 0
     deck = get_deck()
     random.shuffle(deck)
     player_hand = [deck.pop(), deck.pop()]
     ai_hand = [deck.pop(), deck.pop()]
+    session['ai_hand'] = str(ai_hand)
     community = [deck.pop() for _ in range(5)]
     tokens = session.get('tokens', 100)
+    ai_tokens = session.get('ai_tokens', 100)
+    player_bet = session.get('player_bet', 0)
+    ai_bet = session.get('ai_bet', 0)
     # Choose token image based on token count (no underscores in filenames)
     if tokens < 20:
         token_img = 'token.png'
@@ -39,6 +57,9 @@ def start():
         community=community,
         card_filename=card_filename,
         tokens=tokens,
+        ai_tokens=ai_tokens,
+        player_bet=player_bet,
+        ai_bet=ai_bet,
         token_img=token_img
     )
 
@@ -65,6 +86,68 @@ def test_cards():
     else:
         print(f"[ERROR] Directory not found: {cards_dir}")
     return render_template('test_cards.html', files=files)
+
+@app.route('/bet', methods=['POST'])
+def bet():
+    data = request.get_json()
+    player_bet = int(data.get('player_bet', 1))
+    tokens = session.get('tokens', 100)
+    if player_bet < 1 or player_bet > tokens:
+        return jsonify({'error': 'Invalid bet amount'}), 400
+    # Deduct player bet
+    tokens -= player_bet
+    session['tokens'] = tokens
+    session['player_bet'] = session.get('player_bet', 0) + player_bet
+    # AI logic: use hand strength
+    ai_tokens = session.get('ai_tokens', 100)
+    ai_bet = 0
+    ai_action = 'check'
+    ai_hand = session.get('ai_hand')
+    if not ai_hand:
+        ai_hand = [
+            {'rank': '2', 'suit': 'hearts'},
+            {'rank': '7', 'suit': 'clubs'}
+        ]
+    else:
+        # If stored as string, convert to dict
+        import ast
+        if isinstance(ai_hand, str):
+            ai_hand = ast.literal_eval(ai_hand)
+    strength = evaluate_hand_strength(ai_hand)
+    import random
+    if ai_tokens > 0:
+        if strength == 'strong':
+            if player_bet < 10:
+                ai_bet = min(player_bet + random.randint(5, 15), ai_tokens)
+                ai_action = 'raise'
+            else:
+                ai_bet = min(player_bet, ai_tokens)
+                ai_action = 'call'
+        elif strength == 'medium':
+            if player_bet <= 10:
+                ai_bet = min(player_bet, ai_tokens)
+                ai_action = 'call'
+            else:
+                ai_bet = 0
+                ai_action = 'check'
+        else:
+            if player_bet <= 5:
+                ai_bet = min(player_bet, ai_tokens)
+                ai_action = 'call'
+            else:
+                ai_bet = 0
+                ai_action = 'check'
+    ai_tokens -= ai_bet
+    session['ai_tokens'] = ai_tokens
+    session['ai_bet'] = session.get('ai_bet', 0) + ai_bet
+    return jsonify({
+        'player_bet': session['player_bet'],
+        'ai_bet': session['ai_bet'],
+        'tokens': tokens,
+        'ai_tokens': ai_tokens,
+        'ai_action': ai_action,
+        'ai_bet_amount': ai_bet
+    })
 
 if __name__ == '__main__':
     app.run(debug=True)
