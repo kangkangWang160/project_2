@@ -41,10 +41,15 @@
     </a>
     <button class="points-panel-btn" onclick="document.getElementById('pointsPanel').classList.add('open')">&#9876;</button>
     <button class="side-panel-btn" onclick="document.getElementById('sidePanel').classList.add('open')">?</button>
-    <div id="game-status" style="position:fixed; top:0; left:50%; transform:translateX(-50%); width:50vw; background:#1a3d1a; color:#fff; font-size:1.3em; text-align:center; padding:18px 0 10px 0; z-index:1500; box-shadow:0 2px 8px #000a; border-radius:0 0 18px 18px;">
-        <span id="status-text">Welcome to Texas Hold'em! Place your bet to start the round.</span>
+    <div id="game-status" style="position:fixed; top:0; left:50%; transform:translateX(-50%); width:50vw; background:#1a3d1a; color:#fff; font-size:1.3em; text-align:center; padding:18px 0 10px 0; z-index:1500; box-shadow:0 2px 8px #000a; border-radius:0 0 18px 18px; display:flex; align-items:center; justify-content:center;">
+        <span id="status-text" style="flex:1;">Welcome to Texas Hold'em! Place your bet to start the round.</span>
+        <button id="terms-btn" title="Poker Terms" style="margin-left:18px; background:#ffe066; color:#006400; border:none; border-radius:50%; width:38px; height:38px; font-size:1.3em; font-weight:bold; cursor:pointer; box-shadow:0 2px 8px #0004; display:none;">?</button>
     </div>
-    <div id="bet-status" style="position:fixed; top:70px; left:50%; transform:translateX(-50%); min-width:300px; background:#fff3; color:#ffe066; font-size:1.1em; text-align:center; padding:6px 0 6px 0; z-index:1500; border-radius:8px; box-shadow:0 2px 8px #0006;"></div>
+    <div id="terms-modal" style="display:none; position:fixed; top:70px; left:50%; transform:translateX(-50%); background:#1a3d1a; color:#fff; border-radius:14px; box-shadow:0 2px 16px #000a; z-index:2001; padding:28px 32px; min-width:320px; max-width:90vw;">
+        <h3 style="margin-top:0; color:#ffe066;">Poker Terms</h3>
+        <ul id="terms-list" style="font-size:1.1em; line-height:1.7; padding-left:18px;"></ul>
+        <button onclick="document.getElementById('terms-modal').style.display='none'" style="margin-top:18px; background:#ffe066; color:#006400; border:none; border-radius:8px; padding:8px 22px; font-size:1em; font-weight:600; cursor:pointer;">Close</button>
+    </div>
     <div id="sidePanel" class="side-panel">
         <button class="side-panel-close" onclick="document.getElementById('sidePanel').classList.remove('open')">&times;</button>
         <h2>Instructions</h2>
@@ -86,9 +91,10 @@
             </div>
         </div>
         <div class="community-section">
-            <div class="cards">
+            <div class="cards" id="community-cards">
                 <img class="card-img" src="{{ url_for('custom_cards', filename='cards.png') }}" alt="Community Pool">
             </div>
+            <button id="next-btn" class="btn" style="margin-top:18px; background:#ffe066; color:#006400; font-weight:700; font-size:1.1em; border-radius:8px; box-shadow:0 2px 8px #0004;">Next</button>
         </div>
     </div>
     <div class="bottom-section" style="position:relative;">
@@ -111,7 +117,7 @@
         <form id="bet-form" style="position:fixed; top:120px; right:40px; width:320px; background:#1a3d1a; border-radius:14px; box-shadow:0 2px 12px #000a; padding:24px 18px; display:flex; flex-direction:column; align-items:center; gap:18px; z-index:1200;" onsubmit="return submitBet(event)">
             <label for="player_bet" style="font-size:1.2em; color:#fff;">How many tokens do you want to bet?</label>
             <input type="number" id="player_bet" name="player_bet" min="1" max="{{ tokens }}" value="1" style="width:80px; font-size:1.2em; padding:6px 10px; border-radius:6px; border:1px solid #ccc;">
-            <button type="submit" id="bet-btn" class="btn" style="background:#2ecc40; color:#fff;">Check</button>
+            <button type="submit" id="bet-btn" class="btn" style="background:#2ecc40; color:#fff;">{{ 'Call' if call_amount and call_amount > 0 else 'Bet' }}</button>
         </form>
     </div>
     <div style="position:fixed; top:100px; left:30px; z-index:1100; display:flex; align-items:center; gap:10px; background:#ffe066; border-radius:18px; box-shadow:0 2px 8px #0004; padding:10px 18px; min-width:170px;">
@@ -120,6 +126,44 @@
         <span style="font-size:1.1em; color:#006400; font-weight:600; margin-left:6px;">AI tokens left</span>
     </div>
     <script>
+        function showTermsButtonIfNeeded() {
+            const statusText = document.getElementById('status-text').textContent.toLowerCase();
+            const terms = ['check', 'bet', 'call', 'raise', 'fold'];
+            const btn = document.getElementById('terms-btn');
+            btn.style.display = terms.some(term => statusText.includes(term)) ? '' : 'none';
+        }
+        function showRelevantTerms() {
+            const statusText = document.getElementById('status-text').textContent.toLowerCase();
+            const definitions = {
+                check: '<b>Check</b>: To pass the action to the next player without betting. <br><span style="color:#ffe066;">You can only check if no previous player has bet during that round of betting. If someone has bet, you must either call, raise, or fold.</span>',
+                bet: '<b>Bet</b>: To place chips/tokens into the pot for the first time in a round.',
+                call: '<b>Call</b>: To match the current highest bet made by another player.',
+                raise: '<b>Raise</b>: To increase the current bet by adding more chips/tokens.',
+                fold: '<b>Fold</b>: To give up your hand and forfeit the round.'
+            };
+            const termsList = document.getElementById('terms-list');
+            termsList.innerHTML = '';
+            let any = false;
+            for (const term in definitions) {
+                if (statusText.includes(term)) {
+                    const li = document.createElement('li');
+                    li.innerHTML = definitions[term];
+                    termsList.appendChild(li);
+                    any = true;
+                }
+            }
+            if (!any) {
+                const li = document.createElement('li');
+                li.textContent = 'No poker terms to define.';
+                termsList.appendChild(li);
+            }
+        }
+        function updateBetButtonText(callAmount) {
+            const betBtn = document.getElementById('bet-btn');
+            if (betBtn) {
+                betBtn.textContent = (callAmount && callAmount > 0) ? 'Call' : 'Bet';
+            }
+        }
         function submitBet(event) {
             event.preventDefault();
             const bet = document.getElementById('player_bet').value;
@@ -131,15 +175,34 @@
             .then(response => response.json())
             .then(data => {
                 if (data.error) {
-                    document.getElementById('bet-status').textContent = data.error;
-                    document.getElementById('status-text').textContent = data.error;
+                    // Only update status if the element exists
+                    const betStatus = document.getElementById('bet-status');
+                    if (betStatus) betStatus.textContent = data.error;
+                    const statusText = document.getElementById('status-text');
+                    if (statusText) statusText.textContent = data.error;
                 } else {
-                    document.getElementById('bet-status').textContent = `You bet ${bet} tokens. AI action: ${data.ai_action}`;
-                    document.getElementById('status-text').textContent = `You bet ${bet} tokens. AI ${data.ai_action}${data.ai_bet_amount ? ' with ' + data.ai_bet_amount + ' tokens' : ''}.`;
+                    // Only update status if the element exists
+                    const betStatus = document.getElementById('bet-status');
+                    if (betStatus) betStatus.textContent = '';
+                    const statusText = document.getElementById('status-text');
+                    if (statusText) {
+                        let aiActionText = '';
+                        if (data.ai_bet > 0) {
+                            aiActionText = `AI bet ${data.ai_bet} tokens.`;
+                        } else {
+                            aiActionText = `AI checked.`;
+                        }
+                        statusText.textContent = `You bet ${bet} tokens. ${aiActionText}`;
+                    }
                     // Update token counts and bet amounts on the page without reload
                     document.querySelectorAll('.token-number')[0].textContent = data.tokens;
                     document.querySelectorAll('.token-number')[1].textContent = data.ai_tokens;
                     document.querySelectorAll('span[style*="color:#ffe066"]')[0].textContent = data.player_bet;
+                    // Update the player's bet display next to the token image
+                    const playerBetSpans = document.querySelectorAll('.bottom-section span[style*="color:#ffe066"]');
+                    if (playerBetSpans.length > 0) {
+                        playerBetSpans[0].textContent = data.player_bet;
+                    }
                     // Show AI bet next to AI Hand
                     const aiBetBar = document.getElementById('ai-bet-bar');
                     let aiBetDisplay = document.getElementById('ai-bet-display');
@@ -160,9 +223,16 @@
                     // Hide the bet form after player checks
                     document.getElementById('bet-form').style.display = 'none';
                 }
+                // Update bet button text based on call amount
+                updateBetButtonText(data.call_amount);
+                showTermsButtonIfNeeded();
             });
             return false;
         }
+        // Initial set for bet button text
+        updateBetButtonText({{ call_amount|default(0, true) }});
+        // Initial check for terms button
+        showTermsButtonIfNeeded();
         // Close side panels on Escape key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
@@ -170,6 +240,19 @@
                 document.getElementById('pointsPanel').classList.remove('open');
             }
         });
+        document.getElementById('terms-btn').onclick = function() {
+            showRelevantTerms();
+            document.getElementById('terms-modal').style.display = 'block';
+        };
+        document.getElementById('next-btn').onclick = function() {
+            // For demo: add a new card image next to the community pool image
+            const communityCards = document.getElementById('community-cards');
+            const newCard = document.createElement('img');
+            newCard.className = 'card-img';
+            newCard.src = "{{ url_for('custom_cards', filename='cardback.jpg') }}";
+            newCard.alt = 'New Card';
+            communityCards.appendChild(newCard);
+        };
     </script>
 </body>
 </html>
