@@ -34,21 +34,21 @@
         .hand-title { font-weight: bold; color: #baffba; }
         .hand-desc { font-size: 1em; color: #fff; }
         .community-card-select-btn {
-            margin-top: 8px;
+            margin-top: 4px;
+            display: block;
             background: #ffe066;
             color: #006400;
             border: none;
             border-radius: 6px;
-            padding: 4px 14px;
-            font-size: 1em;
+            padding: 2px 8px;
+            font-size: 0.85em;
             font-weight: 600;
             cursor: pointer;
             box-shadow: 0 2px 8px #0004;
             transition: background 0.2s;
-        }
-        .community-card-select-btn.selected {
-            background: #40a2ff;
-            color: #fff;
+            width: 60px;
+            margin-left: auto;
+            margin-right: auto;
         }
         #showdown-confirm-box {
             margin-top: 18px;
@@ -429,7 +429,7 @@
                 headers: { 'Content-Type': 'application/json' }
             })
             .then(response => response.json())
-            .then data => {
+            .then(data => {
                 const statusText = document.getElementById('status-text');
                 if (statusText) statusText.textContent = data.message || 'You forfeited the round.';
                 document.getElementById('bet-form').style.display = 'none';
@@ -495,8 +495,14 @@
             communityCards.querySelectorAll('.community-card-select-btn').forEach(btn => btn.remove());
             const prevBox = document.getElementById('showdown-confirm-box');
             if (prevBox) prevBox.remove();
-            // Add select buttons under each card
+            // Add select buttons under each card, in a row below the cards
             const imgs = communityCards.querySelectorAll('img.card-img');
+            // Create a row for the buttons
+            let btnRow = document.createElement('div');
+            btnRow.style.display = 'flex';
+            btnRow.style.gap = '18px';
+            btnRow.style.justifyContent = 'center';
+            btnRow.style.marginTop = '0px';
             imgs.forEach((img, idx) => {
                 let btn = document.createElement('button');
                 btn.className = 'community-card-select-btn';
@@ -504,13 +510,14 @@
                 btn.dataset.cardIdx = idx;
                 btn.onclick = function() {
                     btn.classList.toggle('selected');
-                    if (communityCards.querySelectorAll('.community-card-select-btn.selected').length > 3) {
+                    if (btnRow.querySelectorAll('.community-card-select-btn.selected').length > 3) {
                         btn.classList.remove('selected');
                     }
-                    updateShowdownSelectionUI(imgs);
+                    updateShowdownSelectionUI(imgs, btnRow);
                 };
-                img.insertAdjacentElement('afterend', btn);
+                btnRow.appendChild(btn);
             });
+            communityCards.parentElement.insertBefore(btnRow, communityCards.nextSibling);
             // Add confirmation box
             const confirmBox = document.createElement('div');
             confirmBox.id = 'showdown-confirm-box';
@@ -522,25 +529,25 @@
             confirmBtn.textContent = 'Confirm Selection';
             confirmBtn.disabled = true;
             confirmBtn.onclick = function() {
-                const selected = Array.from(communityCards.querySelectorAll('.community-card-select-btn.selected'));
+                const selected = Array.from(btnRow.querySelectorAll('.community-card-select-btn.selected'));
                 if (selected.length === 3) {
                     const selectedIdxs = selected.map(btn => Number(btn.dataset.cardIdx));
                     info.textContent = 'Selection confirmed!';
                     confirmBtn.disabled = true;
-                    // TODO: send selectedIdxs to backend or use as needed
+                    // --- Show results modal overlay ---
+                    showShowdownResultsModal(selectedIdxs);
                 }
             };
             confirmBox.appendChild(info);
             confirmBox.appendChild(confirmBtn);
             communityCards.parentElement.appendChild(confirmBox);
         }
-        function updateShowdownSelectionUI(imgs) {
-            const communityCards = document.getElementById('community-cards');
-            const selected = communityCards.querySelectorAll('.community-card-select-btn.selected');
+        function updateShowdownSelectionUI(imgs, btnRow) {
+            const selected = btnRow.querySelectorAll('.community-card-select-btn.selected');
             const confirmBtn = document.getElementById('showdown-confirm-btn');
             if (confirmBtn) confirmBtn.disabled = (selected.length !== 3);
             imgs.forEach((img, idx) => {
-                const btn = img.nextElementSibling;
+                const btn = btnRow.children[idx];
                 if (btn && btn.classList.contains('community-card-select-btn')) {
                     if (btn.classList.contains('selected')) {
                         img.style.boxShadow = '0 0 0 4px #40a2ff, 0 4px 16px #000a';
@@ -549,6 +556,109 @@
                     }
                 }
             });
+        }
+        function showShowdownResultsModal(playerSelectedIdxs) {
+            // Remove any previous modal
+            let prevModal = document.getElementById('showdown-results-modal');
+            if (prevModal) prevModal.remove();
+            // Create overlay
+            const modal = document.createElement('div');
+            modal.id = 'showdown-results-modal';
+            modal.style.position = 'fixed';
+            modal.style.top = '0';
+            modal.style.left = '0';
+            modal.style.width = '100vw';
+            modal.style.height = '100vh';
+            modal.style.background = 'rgba(0,0,0,0.82)';
+            modal.style.display = 'flex';
+            modal.style.flexDirection = 'column';
+            modal.style.justifyContent = 'center';
+            modal.style.alignItems = 'center';
+            modal.style.zIndex = '3000';
+            // Modal content box
+            const box = document.createElement('div');
+            box.style.background = '#1a3d1a';
+            box.style.borderRadius = '18px';
+            box.style.boxShadow = '0 4px 32px #000a';
+            box.style.padding = '38px 44px 32px 44px';
+            box.style.minWidth = '340px';
+            box.style.maxWidth = '90vw';
+            box.style.color = '#fff';
+            box.style.display = 'flex';
+            box.style.flexDirection = 'column';
+            box.style.alignItems = 'center';
+            // Title
+            const title = document.createElement('h2');
+            title.textContent = 'Showdown Results';
+            title.style.color = '#ffe066';
+            title.style.marginTop = '0';
+            box.appendChild(title);
+            // Player selection
+            const playerSel = document.createElement('div');
+            playerSel.style.margin = '18px 0 8px 0';
+            playerSel.innerHTML = `<b>Your selection:</b> <span id='player-selection-cards'></span>`;
+            box.appendChild(playerSel);
+            // AI selection (placeholder)
+            const aiSel = document.createElement('div');
+            aiSel.style.margin = '8px 0 18px 0';
+            aiSel.innerHTML = `<b>AI selection:</b> <span id='ai-selection-cards'></span>`;
+            box.appendChild(aiSel);
+            // Hands
+            const playerHand = document.createElement('div');
+            playerHand.innerHTML = `<b>Your best hand:</b> <span id='player-best-hand'>[calculating...]</span>`;
+            playerHand.style.margin = '8px 0 4px 0';
+            box.appendChild(playerHand);
+            const aiHand = document.createElement('div');
+            aiHand.innerHTML = `<b>AI best hand:</b> <span id='ai-best-hand'>[calculating...]</span>`;
+            aiHand.style.margin = '4px 0 18px 0';
+            box.appendChild(aiHand);
+            // Winner
+            const winner = document.createElement('div');
+            winner.id = 'showdown-winner';
+            winner.style.fontSize = '1.3em';
+            winner.style.fontWeight = '700';
+            winner.style.color = '#baffba';
+            winner.style.margin = '18px 0 0 0';
+            box.appendChild(winner);
+            // Close button
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = 'Close';
+            closeBtn.className = 'btn';
+            closeBtn.style.background = '#ffe066';
+            closeBtn.style.color = '#006400';
+            closeBtn.style.fontWeight = '700';
+            closeBtn.style.fontSize = '1.1em';
+            closeBtn.style.marginTop = '28px';
+            closeBtn.onclick = function() { modal.remove(); };
+            box.appendChild(closeBtn);
+            modal.appendChild(box);
+            document.body.appendChild(modal);
+            // --- Fill in selections and hands (placeholder logic) ---
+            // Get community card names from images
+            const communityCards = document.querySelectorAll('#community-cards img.card-img');
+            const cardNames = Array.from(communityCards).map(img => img.alt);
+            // Player selection
+            const playerCards = playerSelectedIdxs.map(idx => cardNames[idx]);
+            document.getElementById('player-selection-cards').textContent = playerCards.join(', ');
+            // AI selection (random 3 different cards)
+            let aiIdxs = [];
+            while (aiIdxs.length < 3) {
+                let r = Math.floor(Math.random() * 5);
+                if (!playerSelectedIdxs.includes(r) && !aiIdxs.includes(r)) aiIdxs.push(r);
+            }
+            const aiCards = aiIdxs.map(idx => cardNames[idx]);
+            document.getElementById('ai-selection-cards').textContent = aiCards.join(', ');
+            // Placeholder: assign random hands
+            const hands = ['High Card', 'One Pair', 'Two Pair', 'Three of a Kind', 'Straight', 'Flush', 'Full House', 'Four of a Kind', 'Straight Flush', 'Royal Flush'];
+            const playerBest = hands[Math.floor(Math.random()*hands.length)];
+            const aiBest = hands[Math.floor(Math.random()*hands.length)];
+            document.getElementById('player-best-hand').textContent = playerBest;
+            document.getElementById('ai-best-hand').textContent = aiBest;
+            // Winner (placeholder logic)
+            let winnerText = 'It\'s a tie!';
+            if (hands.indexOf(playerBest) > hands.indexOf(aiBest)) winnerText = 'AI wins!';
+            else if (hands.indexOf(playerBest) < hands.indexOf(aiBest)) winnerText = 'You win!';
+            document.getElementById('showdown-winner').textContent = winnerText;
         }
     </script>
 </body>
