@@ -5,7 +5,7 @@
     <style>
         body { background: radial-gradient(circle at 50% 40%, #228B22 60%, #006400 100%); color: #fff; font-family: 'Segoe UI', sans-serif; margin: 0; min-height: 100vh; display: flex; flex-direction: column; }
         .table-area { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; }
-        .ai-section { position: absolute; top: 40px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; }
+        .ai-section { position: absolute; top: 220px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; }
         .community-section { position: absolute; top: 75%; left: 0; right: 0; transform: translateY(-25%); display: flex; flex-direction: column; align-items: center; }
         .cards { display: flex; gap: 18px; justify-content: center; }
         .card-img { height: 120px; border-radius: 10px; box-shadow: 0 4px 16px #000a; background: #fff3; }
@@ -33,6 +33,48 @@
         .hand-example { margin-bottom: 18px; }
         .hand-title { font-weight: bold; color: #baffba; }
         .hand-desc { font-size: 1em; color: #fff; }
+        .community-card-select-btn {
+            margin-top: 8px;
+            background: #ffe066;
+            color: #006400;
+            border: none;
+            border-radius: 6px;
+            padding: 4px 14px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 8px #0004;
+            transition: background 0.2s;
+        }
+        .community-card-select-btn.selected {
+            background: #40a2ff;
+            color: #fff;
+        }
+        #showdown-confirm-box {
+            margin-top: 18px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        #showdown-confirm-btn {
+            background: #2ecc40;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 28px;
+            font-size: 1.1em;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 2px 8px #0004;
+            margin-top: 8px;
+            transition: background 0.2s;
+        }
+        #showdown-confirm-btn:disabled {
+            background: #888;
+            color: #eee;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -305,26 +347,13 @@
             document.getElementById('terms-modal').style.display = 'block';
         };
         document.getElementById('next-btn').onclick = function() {
-            // Move the burn card (cardback) to the far left edge and deal 3 random community cards
             const communityCards = document.getElementById('community-cards');
-            // Remove all existing cards (including placeholder or previous round)
             while (communityCards.firstChild) {
                 communityCards.removeChild(communityCards.firstChild);
             }
-            // Add burn card to the far left edge
-            const burnCard = document.createElement('img');
-            burnCard.className = 'card-img';
-            burnCard.src = "{{ url_for('custom_cards', filename='cardback.jpg') }}";
-            burnCard.alt = 'Burn Card';
-            // No extra margin, just use .cards gap
-            communityCards.appendChild(burnCard);
-            // Add a cardback image to the center (after burn card)
-            const centerCardback = document.createElement('img');
-            centerCardback.className = 'card-img';
-            centerCardback.src = "{{ url_for('custom_cards', filename='cardback.jpg') }}";
-            centerCardback.alt = 'Cardback';
-            communityCards.appendChild(centerCardback);
-            // List of all possible card filenames (excluding cardback and cards.png)
+            // Track how many community cards have been revealed
+            window.revealedCount = window.revealedCount || 0;
+            if (window.revealedCount === undefined) window.revealedCount = 0;
             const cardNames = [
                 '2 of clubs.png','2 of diamonds.png','2 of hearts.png','2 of spades.png',
                 '3 of clubs.png','3 of diamonds.png','3 of hearts.png','3 of spades.png',
@@ -340,36 +369,53 @@
                 'king of clubs.png','king of diamonds.png','king of hearts.png','king of spades.png',
                 'ace of clubs.png','ace of diamonds.png','ace of hearts.png','ace of spades.png'
             ];
-            // Shuffle and pick 3 random cards
-            const shuffled = cardNames.sort(() => 0.5 - Math.random());
-            const selected = shuffled.slice(0, 3);
-            for (const card of selected) {
+            // Reveal logic
+            let reveal = 3;
+            if (window.revealedCount === 3) reveal = 1;
+            else if (window.revealedCount === 4) reveal = 1;
+            else if (window.revealedCount > 0) reveal = 1;
+            if (window.revealedCount < 5) {
+                // Only select new cards for the new reveal
+                window.selectedCards = window.selectedCards || [];
+                const remaining = cardNames.filter(c => !window.selectedCards.includes(c));
+                const shuffled = remaining.sort(() => 0.5 - Math.random());
+                const newCards = shuffled.slice(0, reveal);
+                window.selectedCards = window.selectedCards.concat(newCards);
+                window.revealedCount += reveal;
+            }
+            // Show revealed cards
+            for (let i = 0; i < window.revealedCount && i < 5; i++) {
                 const img = document.createElement('img');
                 img.className = 'card-img';
-                img.src = `/static/cards/${card}`;
-                img.alt = card.replace('.png', '');
+                img.src = `/static/cards/${window.selectedCards[i]}`;
+                img.alt = window.selectedCards[i].replace('.png', '');
                 communityCards.appendChild(img);
             }
-            // Hide the Next button after use
+            // If not all 5 revealed, show a cardback for the next unrevealed card
+            if (window.revealedCount < 5) {
+                const cardback = document.createElement('img');
+                cardback.className = 'card-img';
+                cardback.src = "{{ url_for('custom_cards', filename='cardback.jpg') }}";
+                cardback.alt = 'Cardback';
+                communityCards.appendChild(cardback);
+            }
             hideNextButton();
-            // Update the status text and add a new Next button for the next betting round
             const statusText = document.getElementById('status-text');
-            if (statusText) statusText.textContent = '3 community cards have been revealed.';
-            // Show a new Next button in the status bar
-            const nextBtn = document.getElementById('next-btn');
-            if (nextBtn) {
-                nextBtn.style.display = '';
-                nextBtn.onclick = function() {
-                    // When pressed, update the status text and hide the button
-                    const statusText = document.getElementById('status-text');
-                    if (statusText) statusText.textContent = 'A new round of betting has begun. Choose wisely.';
-                    nextBtn.style.display = 'none';
-                    // Show the betting form again
-                    const betForm = document.getElementById('bet-form');
-                    if (betForm) betForm.style.display = '';
-                    // Add a Call button if not already present
-                    addCallButtonIfNeeded();
-                };
+            if (window.revealedCount >= 5) {
+                if (statusText) statusText.textContent = 'Showdown! All cards revealed.';
+                const betForm = document.getElementById('bet-form');
+                if (betForm) betForm.style.display = 'none';
+                setTimeout(setupShowdownSelection, 200);
+            } else {
+                if (statusText) statusText.textContent = `${window.revealedCount} community card${window.revealedCount > 1 ? 's' : ''} have been revealed.`;
+                const nextBtn = document.getElementById('next-btn');
+                if (nextBtn) {
+                    nextBtn.style.display = '';
+                    nextBtn.onclick = arguments.callee;
+                }
+                const betForm = document.getElementById('bet-form');
+                if (betForm) betForm.style.display = '';
+                addCallButtonIfNeeded();
             }
         };
         document.getElementById('all-in-btn').onclick = function() {
@@ -383,7 +429,7 @@
                 headers: { 'Content-Type': 'application/json' }
             })
             .then(response => response.json())
-            .then(data => {
+            .then data => {
                 const statusText = document.getElementById('status-text');
                 if (statusText) statusText.textContent = data.message || 'You forfeited the round.';
                 document.getElementById('bet-form').style.display = 'none';
@@ -441,6 +487,68 @@
                 const btnRow = betForm.querySelector('div[style*="display:flex"]');
                 if (btnRow) btnRow.insertBefore(callBtn, btnRow.children[1]);
             }
+        }
+        function setupShowdownSelection() {
+            const communityCards = document.getElementById('community-cards');
+            if (!communityCards) return;
+            // Clean up any previous UI
+            communityCards.querySelectorAll('.community-card-select-btn').forEach(btn => btn.remove());
+            const prevBox = document.getElementById('showdown-confirm-box');
+            if (prevBox) prevBox.remove();
+            // Add select buttons under each card
+            const imgs = communityCards.querySelectorAll('img.card-img');
+            imgs.forEach((img, idx) => {
+                let btn = document.createElement('button');
+                btn.className = 'community-card-select-btn';
+                btn.textContent = 'Select';
+                btn.dataset.cardIdx = idx;
+                btn.onclick = function() {
+                    btn.classList.toggle('selected');
+                    if (communityCards.querySelectorAll('.community-card-select-btn.selected').length > 3) {
+                        btn.classList.remove('selected');
+                    }
+                    updateShowdownSelectionUI(imgs);
+                };
+                img.insertAdjacentElement('afterend', btn);
+            });
+            // Add confirmation box
+            const confirmBox = document.createElement('div');
+            confirmBox.id = 'showdown-confirm-box';
+            const info = document.createElement('div');
+            info.id = 'showdown-selection-info';
+            info.textContent = 'Select exactly 3 community cards to use in your final hand.';
+            const confirmBtn = document.createElement('button');
+            confirmBtn.id = 'showdown-confirm-btn';
+            confirmBtn.textContent = 'Confirm Selection';
+            confirmBtn.disabled = true;
+            confirmBtn.onclick = function() {
+                const selected = Array.from(communityCards.querySelectorAll('.community-card-select-btn.selected'));
+                if (selected.length === 3) {
+                    const selectedIdxs = selected.map(btn => Number(btn.dataset.cardIdx));
+                    info.textContent = 'Selection confirmed!';
+                    confirmBtn.disabled = true;
+                    // TODO: send selectedIdxs to backend or use as needed
+                }
+            };
+            confirmBox.appendChild(info);
+            confirmBox.appendChild(confirmBtn);
+            communityCards.parentElement.appendChild(confirmBox);
+        }
+        function updateShowdownSelectionUI(imgs) {
+            const communityCards = document.getElementById('community-cards');
+            const selected = communityCards.querySelectorAll('.community-card-select-btn.selected');
+            const confirmBtn = document.getElementById('showdown-confirm-btn');
+            if (confirmBtn) confirmBtn.disabled = (selected.length !== 3);
+            imgs.forEach((img, idx) => {
+                const btn = img.nextElementSibling;
+                if (btn && btn.classList.contains('community-card-select-btn')) {
+                    if (btn.classList.contains('selected')) {
+                        img.style.boxShadow = '0 0 0 4px #40a2ff, 0 4px 16px #000a';
+                    } else {
+                        img.style.boxShadow = '0 4px 16px #000a';
+                    }
+                }
+            });
         }
     </script>
 </body>
